@@ -1,65 +1,35 @@
 import logging
-
-import pytest
 from collections import defaultdict
+from copy import deepcopy
 from typing import Dict, List
+
 import numpy as np
-from sbbbattlesim import Board
+from tests import PLAYER, make_character
+
+from sbbbattlesim import fight
 from sbbbattlesim.characters import registry as character_registry
-from sbbbattlesim.utils import Tribe
-from sbbbattlesim.action import ActionReason
 from sbbbattlesim.player import Player
-# from sbbbattlesim.simulate import _process, simulate_brawl
-from sbbbattlesim.stats import calculate_stats, BoardStats
-
-
-from tests import make_character, make_player
+from sbbbattlesim.stats import CombatStats
 
 logger = logging.getLogger(__name__)
 
+SIM_DATA = (
+    {
+        'PLAYER_ID': PLAYER | {
+            'characters': [make_character(id='SBB_CHARACTER_FOXTAILARCHER', position=1),],
+            # 'treasures': ['''SBB_TREASURE_HERMES'BOOTS''']
+        },
+        'ENEMY_ID': PLAYER | {
+            'characters': [make_character(id='SBB_CHARACTER_FOXTAILARCHER', position=1),]
+        }
+    },
 
-player = make_player(
-    raw=True,
-    characters=[
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=1, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=2, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=3, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=4, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=5, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=6, attack=10, health=10),
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=7, attack=10, health=10)
-    ],
-    level=6
 )
-enemy = make_player(
-    raw=True,
-    characters=[
-        make_character(id='SBB_CHARACTER_DOOMBREATH', position=1, attack=10, health=10)
-    ],
-    # treasures=['''SBB_TREASURE_HERMES'BOOTS'''],
-    level=6
-)
-board = Board({'PLAYER': player, 'ENEMY': enemy})
-# winner, loser = board.fight()
 
-# player = board.p1
-
-# print(Player.pretty_print(winner))
-# print(Player.pretty_print(loser))
-
-
-def simulate_brawl(board: Board, k: int) -> List[BoardStats]:
+def simulate_brawl(data: dict, k: int) -> List[CombatStats]:
     logger.debug(f'Simulation Process Starting (k={k})')
-    results = []
-    for _ in range(k):
-        board.fight(limit=100)
-        results.append(calculate_stats(board))
+    return [fight(*(Player(id=i, **d) for i, d in deepcopy(data).items()), limit=-1) for _ in range(k)]
 
-    return results
-
-
-results = simulate_brawl(board, k=1000)
-# print(results)
 
 def get_stats(results):
     aggregated_results = defaultdict(list)
@@ -82,6 +52,8 @@ def get_stats(results):
     win_dmg_string = str(round(np.mean(win_damages), 1) if win_percent > 0 else 0)
     loss_dmg_string = str(round(np.mean(loss_damages), 1) if loss_percent > 0 else 0)
 
-    print(win_string, tie_string, loss_string, win_dmg_string, loss_dmg_string)
+    print("Win:", win_string, "Tie:", tie_string, "Loss:", loss_string, "Dmg:", win_dmg_string, loss_dmg_string)
 
-get_stats(results)
+
+combat_stats = simulate_brawl(SIM_DATA[0], k=1000)
+get_stats(combat_stats)
