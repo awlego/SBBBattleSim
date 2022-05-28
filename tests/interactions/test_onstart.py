@@ -1,6 +1,6 @@
 import pytest
 
-from sbbbattlesim import Board
+from sbbbattlesim import fight
 from sbbbattlesim.utils import Tribe
 from tests import make_character, make_player
 
@@ -16,10 +16,6 @@ def test_onstart_trees(roundtable):
             make_character(
                 id="SBB_CHARACTER_ELDERTREANT", position=5,
                 attack=0, health=7, tribes=[Tribe.GOOD, Tribe.TREANT]
-            ),
-            make_character(
-                id="SBB_CHARACTER_GOODANDEVILSISTERS", position=7,
-                attack=1, health=1
             )
 
         ],
@@ -30,22 +26,19 @@ def test_onstart_trees(roundtable):
         ]
     )
     enemy = make_player()
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=0)
+    fight(player, enemy, limit=0)
 
 
-    ashwood = board.p1.characters[2]
-    elderwood = board.p1.characters[5]
-    shoulders = board.p1.characters[7]
+    ashwood = player.characters[2]
+    elderwood = player.characters[5]
+    shoulders = player.characters[7]
 
     if roundtable:
         assert (ashwood.attack, ashwood.health) == (109, 109)
         assert (elderwood.attack, elderwood.health) == (121, 121)
-        assert (shoulders.attack, shoulders.health) == (112, 112)
     else:
         assert (ashwood.attack, ashwood.health) == (109, 104)
         assert (elderwood.attack, elderwood.health) == (121, 24)
-        assert (shoulders.attack, shoulders.health) == (112, 12)
 
 
 def test_onstart_arthur_and_lordy():
@@ -53,11 +46,11 @@ def test_onstart_arthur_and_lordy():
         characters=[
             make_character(
                 id="SBB_CHARACTER_KINGARTHUR", position=2, golden=True,
-                attack=5, health=5, tribes=[Tribe.PRINCE]
+                attack=5, health=5, tribes=[Tribe.ROYAL]
             ),
             make_character(
                 id="SBB_CHARACTER_FORGEMASTERDWARF", position=3, golden=True,
-                attack=5, health=5, tribes=[Tribe.PRINCE]
+                attack=5, health=5, tribes=[Tribe.ROYAL]
             ),
             make_character(
                 position=5, attack=6, health=6
@@ -68,52 +61,12 @@ def test_onstart_arthur_and_lordy():
         ]
     )
     enemy = make_player()
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=0)
+    fight(player, enemy, limit=0)
 
 
-    arthur = board.p1.characters[2]
-    lordy = board.p1.characters[3]
-    generic = board.p1.characters[5]
+    arthur = player.characters[2]
+    lordy = player.characters[3]
+    generic = player.characters[5]
 
     assert (arthur.attack, arthur.health) == (9, 9)
     assert (generic.attack, generic.health) == (21, 21)
-
-
-def test_echowood_shoulder_roundtable():
-    player = make_player(
-        characters=[
-            make_character(
-                position=2, attack=2, health=100, tribes=[Tribe.EVIL]
-            ),
-            make_character(
-                position=5, attack=5, health=1, tribes=[Tribe.GOOD]
-            ),
-            make_character(
-                id="SBB_CHARACTER_GOODANDEVILSISTERS", position=7,
-                attack=1, health=1
-            ),
-            make_character(
-                id="SBB_CHARACTER_ECHOWOODSHAMBLER", position=6,
-                attack=1, health=1
-            )
-
-        ],
-        treasures=[
-            "SBB_TREASURE_THEROUNDTABLE"
-        ]
-    )
-    enemy = make_player()
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=0)
-
-
-    _evil = board.p1.characters[2]
-    good = board.p1.characters[5]
-    echo = board.p1.characters[6]
-    shoulders = board.p1.characters[7]
-
-    assert (_evil.attack, _evil.health) == (100, 100)
-    assert (good.attack, good.health) == (5, 5)
-    assert (shoulders.attack, shoulders.health) == (3, 3)
-    assert (echo.attack, echo.health) == (101, 8)

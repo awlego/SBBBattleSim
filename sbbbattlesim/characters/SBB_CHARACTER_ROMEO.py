@@ -23,6 +23,9 @@ class RomeoLastBreath(OnDeath):
 
     def handle(self, stack, reason, *args, **kwargs):
         dead_juliets = [j for j in self.manager.player.graveyard if j.id == JULIET_ID]
+        dying_juliets = [j for j in self.manager.player.characters.values() if j is not None and j.id == JULIET_ID and j.dead]
+
+        dead_juliets.extend(dying_juliets)
 
         if dead_juliets:
             juliet = max(dead_juliets, key=lambda juliet: (juliet.attack, juliet.health))
@@ -48,7 +51,7 @@ class CharacterType(Character):
     _attack = 5
     _health = 3
     _level = 3
-    _tribes = {Tribe.GOOD, Tribe.PRINCE}
+    _tribes = {Tribe.GOOD, Tribe.ROYAL}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

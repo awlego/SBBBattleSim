@@ -7,10 +7,12 @@ from dataclasses import dataclass, field
 from typing import List
 import copy
 
+from sbbbattlesim.record import Record
+
 logger = logging.getLogger(__name__)
 
 
-class SSBBSEvent:
+class Event:
     def __init__(
             self,
             manager: ('EventManager', 'Character', 'Player', 'Board'),
@@ -47,29 +49,29 @@ class SSBBSEvent:
         raise NotImplementedError
 
 
-class OnSetup(SSBBSEvent):
+class OnSetup(Event):
     '''On Setup of Brawl'''
 
 
-class OnStart(SSBBSEvent):
+class OnStart(Event):
     '''Start of Brawl'''
 
 
-class OnSpawn(SSBBSEvent):
+class OnSpawn(Event):
     '''Triggered after a unit spawns'''
 
 
-class OnDespawn(SSBBSEvent):
+class OnDespawn(Event):
     '''Triggered after a unit despawns'''
 
 
-class OnSummon(SSBBSEvent):
+class OnSummon(Event):
     '''A unit is summoned'''
     def handle(self, summoned_characters, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnDeath(SSBBSEvent):
+class OnDeath(Event):
     '''A character dies'''
     last_breath: typing.ClassVar[bool] = False
 
@@ -89,41 +91,41 @@ class OnDeath(SSBBSEvent):
         raise NotImplementedError
 
 
-class OnLastBreath(SSBBSEvent):
+class OnLastBreath(Event):
     '''A character last a last breath'''
     def handle(self, source, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnPreAttack(SSBBSEvent):
+class OnPreAttack(Event):
     '''An attacking character attacks'''
     def handle(self, attack_position, defend_position, defend_player, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnPostAttack(SSBBSEvent):
+class OnPostAttack(Event):
     '''An attacking character attacks'''
     def handle(self, attack_position, defend_position, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnPreDefend(SSBBSEvent):
+class OnPreDefend(Event):
     '''A defending character is attacked'''
     def handle(self, attack_position, defend_position, defender, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnPostDefend(SSBBSEvent):
+class OnPostDefend(Event):
     '''A defending character is attacked'''
     def handle(self, attack_position, defend_position, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnDamagedAndSurvived(SSBBSEvent):
+class OnDamagedAndSurvived(Event):
     '''A character gets damaged and doesn't die'''
 
 
-class OnAttackAndKill(SSBBSEvent):
+class OnAttackAndKill(Event):
     '''A character attacks something and kills it'''
     slay: typing.ClassVar[bool] = False
 
@@ -143,25 +145,25 @@ class OnAttackAndKill(SSBBSEvent):
         raise NotImplementedError
 
 
-class OnSlay(SSBBSEvent):
+class OnSlay(Event):
     '''A character has triggered a slay'''
     def handle(self, source, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnSpellCast(SSBBSEvent):
+class OnSpellCast(Event):
     '''A player cast a spell'''
     def handle(self, caster, spell, target, stack, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnBuff(SSBBSEvent):
+class OnBuff(Event):
     '''Triggered when something has a stat change'''
     def handle(self, stack, attack, health, reason=None, *args, **kwargs):
         raise NotImplementedError
 
 
-class OnSupport(SSBBSEvent):
+class OnSupport(Event):
     '''Triggered when something '''
     def handle(self, buffed, support, stack, *args, **kwargs):
         raise NotImplementedError
@@ -190,7 +192,7 @@ class EventManager:
         self._events[event_base] = self._events[event_base] - {event}
 
     def get(self, event):
-        evts = self._events[event]
+        evts = self._events.get(event, set())
         evts_set = set(evts)
         processed_events = set()
 
@@ -273,7 +275,7 @@ class EventExecutor:
 
 @dataclass
 class EventStack:
-    stack: List[SSBBSEvent] = field(default_factory=list)
+    stack: List[Event] = field(default_factory=list)
 
     def __repr__(self):
         return f'{[evt.__class__.__name__ for evt in self.stack]}'

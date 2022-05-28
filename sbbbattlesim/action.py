@@ -7,7 +7,8 @@ from enum import Enum
 from typing import List
 import inspect
 
-from sbbbattlesim.events import SSBBSEvent
+from sbbbattlesim.events import Event
+from sbbbattlesim.record import Record
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,9 @@ class ActionReason(enum.Enum):
     PRINCESS_WIGHT_BUFF = 145
     BOSSY_BUFF = 146
     TWEEDLEDEE_BUFF = 147
+    JORM_ON_SLAY_BUFF = 148
+    BURNING_TREE_BUFF = 149
+    WATER_WRAITH_BUFF = 150
 
     ANCIENT_SARCOPHAGUS = 201
     BAD_MOON = 202
@@ -109,8 +113,10 @@ class ActionReason(enum.Enum):
     IVORY_OWL_BUFF = 242
     ROUND_TABLE_BUFF = 243
     SINGINGSWORD_BUFF = 244
+    CURSED_THRONE = 245
 
-    EVELLA_BUFF = 301
+    EVELLA_BASE_BUFF = 301
+    EVELLA_ANIMAL_BUFF = 301
     MERLIN_BUFF = 302
     POTION_MASTER_BUFF = 303
     GEPPETTO_BUFF = 304
@@ -167,7 +173,7 @@ class Action:
             health: int = 0,
             damage: int = 0,
             heal: int = 0,
-            event: (SSBBSEvent, None) = None,
+            event: (Event, None) = None,
             _action=None,
             temp: bool = False,
             *args,
@@ -194,6 +200,7 @@ class Action:
 
         self.state = ActionState.CREATED
         self._char_buffer = set()
+        self._killed_char_buffer = set()
         self._event_buffer = collections.defaultdict(list)
 
         logger.debug(f'New {self} atk={self.attack} hp={self.health} dmg={self.damage} heal={self.heal} temp={self.temp} from_event_aura={self.event is not None}')
@@ -226,12 +233,12 @@ class Action:
         if self.heal > 0 or self.heal == -1:
             char._damage = 0 if self.heal == -1 else max(char._damage - self.heal, 0)
 
-        if char.health <= 0:
-            char.dead = True
-            logger.debug(f'{char.pretty_print()} marked for death in execution')
-        elif self.damage > 0:
-            char('OnDamagedAndSurvived', damage=self.damage, *args, **kwargs)
-
+        if self.damage or self.health:
+            if char.health <= 0:
+                char.dead = True
+                logger.debug(f'{char.pretty_print()} marked for death in execution')
+            elif self.damage > 0:
+                char('OnDamagedAndSurvived', damage=self.damage, *args, **kwargs)
 
     def _clear(self, char, *args, **kwargs):
         '''
@@ -248,6 +255,7 @@ class Action:
             if char.health <= 0:
                 char.dead = True
                 logger.debug(f'{char.pretty_print()} marked for death B')
+                self._killed_char_buffer.add(char)
 
         if self.attack != 0:
             char._base_attack -= self.attack
@@ -322,6 +330,7 @@ class Action:
             if char not in self._char_buffer:
                 continue
             self._char_buffer.remove(char)
+            self._killed_char_buffer.add(char)
 
             args = self.args
             kwargs = self.kwargs | kwargs
@@ -331,6 +340,7 @@ class Action:
             if any(v != 0 for v in (self.attack, self.health, self.damage, self.heal)):
                 self._clear(char, *args, **kwargs)
 
+        self.handle_deaths(*characters)
         self.state = ActionState.ROLLED_BACK
 
     def resolve(self):
@@ -341,12 +351,16 @@ class Action:
             return
 
         logger.debug(f'RESOLVING DAMAGE FOR {self}')
+        self.handle_deaths()
+        self.state = ActionState.RESOLVED
 
+    def handle_deaths(self, *characters):
+        char_iter = set(characters) or self._char_buffer.copy()
         dead_character_dict = collections.defaultdict(list)
-        for char in self._char_buffer:
+        for char in char_iter | self._killed_char_buffer:
             if char.dead and char not in char.player.graveyard:
                 dead_character_dict[char.player].append(char)
-        self._char_buffer = set()
+        self._char_buffer = self._char_buffer - char_iter
 
         if dead_character_dict:
             char_ls = [self.source.player, self.source.player.opponent]
@@ -354,9 +368,6 @@ class Action:
                 if player in dead_character_dict:
                     dead_characters = dead_character_dict[player]
                     player.despawn(*sorted(dead_characters, key=lambda _char: _char.position, reverse=True), reason=self.reason)
-
-
-        self.state = ActionState.RESOLVED
 
 
 class Damage(Action):

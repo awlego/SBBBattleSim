@@ -33,14 +33,15 @@ class PlayerOnSetup(OnSetup):
 
 
 class Player(EventManager):
-    def __init__(self, characters, id, board, treasures, hero, hand, spells, level=0, raw=False, *args, **kwargs):
+    def __init__(self, id, characters, treasures, hero, hand, spells, level=0, raw=False, *args, **kwargs):
         raw=True
         super().__init__()
-        # Board is board
-        self.board = board
-        self.board.register(PlayerOnSetup, source=self, priority=0, raw=raw)
 
+        self.id = id
         self.__characters = OrderedDict({i: None for i in range(1, 8)})
+
+        self.register(PlayerOnSetup, source=self, priority=0, raw=raw)
+
         self.stateful_effects = {}
         self._attack_slot = None
         self.graveyard = []
@@ -50,7 +51,7 @@ class Player(EventManager):
         self._last_attacker = None
         self._attack_chain = 0
         self._spells_cast = kwargs.get('spells_cast', None)
-
+        self.spells = spells
 
         # Treasure Counting
         self.banner_of_command = 'SBB_TREASURE_BANNEROFCOMMAND' in treasures
@@ -74,13 +75,14 @@ class Player(EventManager):
             logger.debug(f'{self.id} Registering treasure {treasure.pretty_print()}')
             self.treasures[treasure.id].append(treasure)
 
-        self.hand = [character_registry[char_data['id']](player=self, **char_data) for char_data in hand]
         self.hero = hero_registry[hero](player=self, *args, **kwargs)
+        if not self.hero.id:
+            self.hero.id = hero
         logger.debug(f'{self.id} registering hero {self.hero.pretty_print()}')
 
         for spl in spells:
             if spl in utils.START_OF_FIGHT_SPELLS:
-                self.board.register(CastSpellOnStart, spell=spl, source=self, priority=spell_registry[spl].priority)
+                self.register(CastSpellOnStart, spell=spl, source=self, priority=spell_registry[spl].priority)
 
         for char_data in characters:
             char = character_registry[char_data['id']](player=self, **char_data)
@@ -108,6 +110,8 @@ class Player(EventManager):
             except TypeError:
                 self.auras.add(self.hero.aura)
 
+        self.hand = [character_registry[char_data['id']](player=self, **char_data) for char_data in hand if isinstance(char_data, dict) and 'id' in char_data and char_data['id'].startswith('SBB_CHARACTER')]
+
         for aura in self.auras:
             logger.debug(f'{self.id} found aura {aura}')
 
@@ -121,6 +125,7 @@ class Player(EventManager):
         # Handle case where tokens are spawning in the same position
         # With the max chain of 5 as implemented to stop trophy hunter + croc + grim soul shenanigans
         attack_slot_char = self.characters.get(self._attack_slot)
+
         if (self._attack_chain >= 5) or (self._last_attacker is None) or (attack_slot_char is not None and attack_slot_char.has_attacked):
             # Prevents the same character from attacking repeatedly
             if self._last_attacker is not None:
@@ -190,20 +195,23 @@ class Player(EventManager):
     def despawn(self, *characters, **kwargs):
         kill = kwargs.get('kill', True)
 
-        if kill:
-            for char in characters:
-                logger.info(f'Despawning {char.pretty_print()}')
-                position = char.position
-                self.graveyard.append(char)
-                self.__characters[position] = None
-                logger.info(f'{char.pretty_print()} died')
-                char('Despawn', **kwargs)
+        # This is only false for transform effects
+        for char in characters:
+            logger.info(f'Despawning {char.pretty_print()}')
+            position = char.position
+            self.__characters[position] = None
 
+            if kill:
+                self.graveyard.append(char)
+                logger.info(f'{char.pretty_print()} died')
+
+            char('Despawn', **kwargs)
+
+        if kill:
             for char in characters:
                 char('OnDeath', **kwargs)
 
         for char in characters:
-
             if char.support:
                 char.support.roll_back()
 
@@ -235,11 +243,13 @@ class Player(EventManager):
             pos2char[char.position].append(char)
 
         for pos, char_ls in pos2char.items():
-            final_summoned_characters.extend(self.summon(pos, char_ls))
+            final_summoned_characters.extend(self.summon(pos, char_ls, onsummon=False))
+
+        stack = self('OnSummon', summoned_characters=final_summoned_characters)
 
         return final_summoned_characters
 
-    def summon(self, pos, characters, *args, **kwargs):
+    def summon(self, pos, characters, onsummon=True, *args, **kwargs):
         summoned_characters = []
         spawn_order = utils.get_spawn_positions(pos)
         for char in characters:
@@ -250,7 +260,8 @@ class Player(EventManager):
             summoned_characters.append(self.spawn(char, pos))
 
         # The player handles on-summon effects
-        stack = self('OnSummon', summoned_characters=summoned_characters)
+        if onsummon:
+            stack = self('OnSummon', summoned_characters=summoned_characters)
 
         return summoned_characters
 
@@ -267,7 +278,7 @@ class Player(EventManager):
         onto the base lambda that guarantees that the character exists and is not dead
         """
         # NOTE: this assumes that a dead thing can NEVER be targeted
-        base_lambda = lambda char: char is not None and not char.dead
+        base_lambda = lambda char: char is not None and not char.dead and char.health > 0
 
         return [char for char in self.__characters.values() if base_lambda(char) and _lambda(char)]
 
@@ -296,3 +307,44 @@ class Player(EventManager):
             stack = self('OnSpellCast', caster=self, spell=spell, target=target)
 
         spell(self).cast(target=target)
+
+    def to_state(self):
+        # Need to case the tribes from enum to their strings
+        treasures = [key for key, value in self.treasures.items() for treasure in value ]
+
+        characters = [
+            {
+                'position': slot,
+                'id': character.id,
+                'attack': character.attack,
+                'health': character.health,
+                'golden': character.golden,
+                'cost': character.cost,
+                'tribes': [tribe.name.lower() for tribe in character.tribes],
+            }
+            for slot, character in self.__characters.items()
+            if character is not None
+        ]
+        hero = self.hero.id
+        spells = list(self.spells)
+        hand = [
+            {
+                'slot': 0,
+                'id': character.id,
+                'attack': character.attack,
+                'health': character.health,
+                'golden': character.golden,
+                'cost': character.cost,
+                'tribes': [tribe.name.lower() for tribe in character.tribes],
+            }
+            for character in self.hand
+        ]
+
+        return {
+            'characters': characters,
+            'treasures': treasures,
+            'hero': hero,
+            'spells': spells,
+            'hand': hand,
+            'level': self.level,
+        }

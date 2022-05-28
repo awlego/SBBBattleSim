@@ -23,12 +23,13 @@ class GrimSoulOnDeath(OnDeath):
                     for slay in slays:
                         logger.debug(f'Grim soul Triggering OnAttackAndKill({args} {kwargs})')
                         executor.execute(slay, killed_character=None, *args, **kwargs)
+                    executor._react_buffer = executor._react_buffer[:1]   # Listeners to Grim Soul should react only once, no matter how many slays Grim Soul runs
 
 
 class CharacterType(Character):
     display_name = 'Grim Soul'
 
-    _attack = 4
+    _attack = 5
     _health = 1
     _level = 4
     _tribes = {Tribe.MONSTER}

@@ -10,7 +10,7 @@ class FriendlySpiritLastBreath(OnDeath):
     last_breath = True
 
     def handle(self, stack, reason, *args, **kwargs):
-        chars = self.manager.player.valid_characters()
+        chars = self.manager.player.valid_characters(lambda char: char is not self.manager)
         if not chars:
             return
 
@@ -27,7 +27,7 @@ class CharacterType(Character):
     last_breath = True
 
     _attack = 3
-    _health = 3
+    _health = 4
     _level = 4
     _tribes = {Tribe.GOOD, Tribe.MONSTER}
 

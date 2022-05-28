@@ -1,4 +1,4 @@
-from sbbbattlesim import Board
+from sbbbattlesim import fight
 from sbbbattlesim.utils import Tribe
 from tests import make_character, make_player
 
@@ -13,13 +13,12 @@ def test_courtwizard_spearofachilles():
     )
     enemy = make_player(
         characters=[
-            make_character(position=1, tribes=[Tribe.PRINCE]),
+            make_character(position=1, tribes=[Tribe.ROYAL]),
             make_character(id="SBB_CHARACTER_COURTWIZARD", position=5)
         ],
         treasures=['''SBB_TREASURE_SPEAROFACHILLES''']
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
+    fight(player, enemy, limit=1)
 
 
-    assert (board.p2.characters[5].attack, board.p2.characters[5].health) == (8, 8)
+    assert (enemy.characters[5].attack, enemy.characters[5].health) == (8, 8)

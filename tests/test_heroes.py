@@ -2,13 +2,12 @@ import logging
 
 import pytest
 
-from sbbbattlesim import Board
-from sbbbattlesim.events import OnStart
-from sbbbattlesim.utils import Tribe
+from sbbbattlesim import fight
 from sbbbattlesim.action import ActionReason
 from sbbbattlesim.characters import registry as character_registry
+from sbbbattlesim.events import OnStart, EventManager
+from sbbbattlesim.utils import Tribe
 from tests import make_character, make_player
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +30,10 @@ def test_charon(is_real):
         ],
         treasures=['''SBB_TREASURE_HERMES'BOOTS''']
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
 
-    player = board.p1
+
     dead = player.graveyard[0]
     assert dead
     assert dead.attack == 1 and dead.health + dead._damage == 1
@@ -61,10 +59,9 @@ def test_evella(on, evil_back):
         characters=[make_character(id='GENERIC', position=1)],
         treasures=['''SBB_TREASURE_HERMES'BOOTS''']
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
-    player = board.p1
+
 
     logger.debug(player.pretty_print())
 
@@ -74,7 +71,7 @@ def test_evella(on, evil_back):
     assert buffed_animal
     assert buffed_animal.attack == (2 if on and evil_back else 1) and buffed_animal.health == 1
     assert buffed_cat
-    assert buffed_cat.attack == (2 if on else 1) and buffed_cat.health == 1
+    assert buffed_cat.attack == (3 if on else 2) and buffed_cat.health == 1
 
 
 def test_evella_lots():
@@ -91,15 +88,14 @@ def test_evella_lots():
         characters=[make_character(id='GENERIC', position=1, attack=3, health=5)],
         treasures=['''SBB_TREASURE_HERMES'BOOTS''']
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
-    player = board.p1
+
 
     buffed_cat = player.characters.get(5)
 
     assert buffed_cat
-    assert buffed_cat.attack == 4
+    assert buffed_cat.attack == 5
 
 
 @pytest.mark.parametrize('on', (True, False))
@@ -117,11 +113,10 @@ def test_sad_dracula(on):
         raw=True,
         characters=[make_character(id='GENERIC', position=2)],
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
 
-    player = board.p1
+
 
     shadow_assassin = player.characters.get(5)
 
@@ -139,30 +134,26 @@ def test_fate(on):
         hero='SBB_HERO_FATE'
     )
     enemy = make_player(raw=True)
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
 
     class FakeTrojanDonkeySummon(OnStart):
 
         def handle(self, *args, **kwargs):
             summon = character_registry["SBB_CHARACTER_BLACKCAT"].new(
-                player=self.manager.p1,
+                player=self.source,
                 position=2,
                 golden=on,
             )
-            self.manager.p1.summon(2, [summon])
+            self.source.summon(2, [summon])
 
-    board.register(FakeTrojanDonkeySummon)
+    player.register(FakeTrojanDonkeySummon)
 
-    winner, loser = board.fight()
-
-
-    player = board.p1
+    fight(player, enemy, limit=5)
 
     generic = player.characters.get(2)
 
     assert generic
-    assert generic.attack == (7 if on else 1)
-    assert generic.health == (7 if on else 1)
+    assert generic.attack == (5 if on else 1)
+    assert generic.health == (5 if on else 1)
 
 
 def test_gepetto():
@@ -178,10 +169,7 @@ def test_gepetto():
         raw=True,
         characters=[make_character(id='GENERIC', position=1)],
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     cat = player.characters.get(1)
 
@@ -205,10 +193,7 @@ def test_krampus(on):
             make_character(attack=10, health=10)
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
-
-    player = board.p1
+    fight(player, enemy, limit=1)
 
     evil = player.characters.get(1)
 
@@ -232,10 +217,7 @@ def test_mrsclaus(on):
             make_character(attack=10, health=10)
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
-
-    player = board.p1
+    fight(player, enemy, limit=1)
 
     good = player.characters.get(1)
 
@@ -258,20 +240,20 @@ def test_merlin():
         raw=True,
         characters=[make_character(id='GENERIC', position=1)],
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
-    player = board.p1
+
 
     char = player.characters.get(7)
 
     assert char
     for pos in [7]:
         wizardbuffs = [
-            r for r in board.p1.characters[pos]._action_history if r.reason == ActionReason.MERLIN_BUFF
+            r for r in player.characters[pos]._action_history if r.reason == ActionReason.MERLIN_BUFF
         ]
 
         assert len(wizardbuffs) == 1
+
 
 def test_merlin_not_activate():
     player = make_player(
@@ -289,22 +271,21 @@ def test_merlin_not_activate():
         raw=True,
         characters=[make_character(id='GENERIC', position=1)],
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    enemy_char = board.p2.characters[1]
-    winner, loser = board.fight()
+    enemy_char = enemy.characters[1]
 
-    player = board.p1
+    fight(player, enemy)
 
     char = player.characters.get(7)
 
     assert char
     for pos in [7]:
         wizardbuffs = [
-            r for r in board.p1.characters[pos]._action_history if r.reason == ActionReason.MERLIN_BUFF
+            r for r in player.characters[pos]._action_history if r.reason == ActionReason.MERLIN_BUFF
         ]
 
         assert len(wizardbuffs) == 0
 
+    assert enemy_char
     assert enemy_char.dead
 
 
@@ -323,11 +304,7 @@ def test_jacks_giant(on):
             make_character(attack=10, health=10)
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
-
-
-    player = board.p1
+    fight(player, enemy, limit=1)
 
     generic = player.characters.get(1 if on else 5)
 
@@ -341,18 +318,15 @@ def test_mihri(on):
     player = make_player(
         raw=True,
         characters=[
-            make_character(id='ROYAL', position=1, tribes=['prince'] if on else []),
-            make_character(id='ROYAL', position=2, tribes=['princess'] if on else [])
+            make_character(id='ROYAL', position=1, tribes=['royal'] if on else []),
+            make_character(id='ROYAL', position=2, tribes=['royal'] if on else [])
         ],
         hero='SBB_HERO_KINGLION',
         mihri_buff=5
     )
 
     enemy = make_player(raw=True)
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     for pos in [1, 2]:
         royal = player.characters.get(pos)
@@ -370,6 +344,33 @@ def test_mihri(on):
             assert mihri_buff is None
 
 
+@pytest.mark.parametrize('on', (True, False))
+def test_mihri_rollback_safety(on):
+    player = make_player(
+        raw=False,
+        characters=[
+            make_character(id='ROYAL', position=1, health=30, tribes=['royal'] if on else []),
+        ],
+        hero='SBB_HERO_KINGLION',
+        mihri_buff=5,
+    )
+
+    enemy = make_player(raw=True)
+
+    fight_event_manager = EventManager()
+
+    fight_event_manager._events['OnSetup'].update(player._events['OnSetup'])
+    fight_event_manager._events['OnSetup'].update(enemy._events['OnSetup'])
+    fight_event_manager("OnSetup")
+
+    c1 = player.characters[1]
+    player.despawn(c1, kill=False)
+    player.spawn(c1, 1)
+
+    assert c1.attack == 1
+    assert c1.health == 30
+
+
 def test_trophy_hunter():
     player = make_player(
         raw=True,
@@ -384,10 +385,7 @@ def test_trophy_hunter():
         raw=True,
         characters=[make_character(id='GENERIC', position=1)],
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     assert player.characters[1].id == 'SBB_CHARACTER_CAT'
     assert player.characters[2].id == 'SBB_CHARACTER_CAT'
@@ -412,10 +410,7 @@ def test_trophy_hunter2():
             make_character(id='SBB_CHARACTER_BLACKCAT')
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
-
-    player = board.p1
+    fight(player, enemy, limit=1)
 
     blackcat = player.characters[1]
     assert blackcat
@@ -441,21 +436,19 @@ def test_trophy_hunter_yaga():
             make_character()
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     for pos in [1, 2, 3]:
         assert player.characters[pos].id == "SBB_CHARACTER_CAT"
 
 
-@pytest.mark.parametrize('limit', (1, 3, 5))
+@pytest.mark.parametrize('limit', (1, 5, 9))
 def test_trophy_hunter_friendlyspirit(limit):
     player = make_player(
         raw=True,
         characters=[
             make_character(id='SBB_CHARACTER_FRIENDLYGHOST', position=1, attack=5, health=10),
+            make_character(position=6, attack=5, health=10)
         ],
         treasures=['''SBB_TREASURE_HERMES'BOOTS'''],
         hero='SBB_HERO_MILITARYLEADER',
@@ -464,28 +457,30 @@ def test_trophy_hunter_friendlyspirit(limit):
     enemy = make_player(
         raw=True,
         characters=[
-            make_character(attack=0, position=1),
-            make_character(attack=0, position=2),
-            make_character(attack=0, position=3),
+            make_character(attack=0, health=1, position=1),
+            make_character(attack=0, health=1, position=2),
+            make_character(attack=0, health=1, position=3),
+            make_character(attack=0, health=1, position=4),
+            make_character(attack=0, health=1, position=5),
+            make_character(attack=0, health=1, position=6),
+            make_character(attack=0, health=1, position=7),
         ]
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=limit)
+    fight(player, enemy, limit=limit)
 
-
-    player = board.p1
-
-    ghost = board.p1.characters[1]
+    ghost = player.characters[1]
+    ally = player.characters[6]
     if limit == 1:
         final_stats = (10, 20)
-    elif limit == 3:
-        final_stats = (20, 40)
     elif limit == 5:
-        final_stats = (40, 80)
+        final_stats = (15, 30)
+    elif limit == 9:
+        final_stats = (20, 40)
     else:
         raise ValueError(f'Limit of {limit} is not configured in the test')
 
-    assert (ghost.attack, ghost.health) == final_stats
+    assert (ghost.attack, ghost.health) == (5, 10)
+    assert (ally.attack, ally.health) == final_stats
 
 
 @pytest.mark.parametrize('on', (True, False))
@@ -502,10 +497,7 @@ def test_beauty(on):
 
     enemy = make_player(raw=True,)
 
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     t1 = player.characters[1].tribes
     t2 = player.characters[2].tribes
@@ -530,10 +522,7 @@ def test_beauty_withtreasure(treasure):
 
     enemy = make_player(raw=True)
 
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     assert player.characters[1].tribes == {Tribe.GOOD, Tribe.EVIL, Tribe.ANIMAL}
 
@@ -555,10 +544,7 @@ def test_beauty_spawnedanimal():
         ]
     )
 
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     assert player.characters[1].tribes == {Tribe.GOOD, Tribe.EVIL, Tribe.ANIMAL}
 
@@ -584,10 +570,9 @@ def test_fallen_angel(tribes, attack, health):
         characters=[make_character(attack=10, health=10)]
     )
 
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight(limit=1)
+    fight(player, enemy, limit=1)
 
-    player = board.p1
+
 
     for pos in [1, 2, 3]:
         char = player.characters.get(pos)
@@ -614,10 +599,7 @@ def test_fallen_angel_raw(tribes, attack, health):
 
     enemy = make_player()
 
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     fallen_angel_buff = player.hero.aura
 
@@ -650,10 +632,7 @@ def test_muerte():
         characters=[make_character(id='GENERIC', position=1)],
         treasures=['''SBB_TREASURE_HERMES'BOOTS''']
     )
-    board = Board({'PLAYER': player, 'ENEMY': enemy})
-    winner, loser = board.fight()
-
-    player = board.p1
+    fight(player, enemy)
 
     assert player.characters[1].id == 'SBB_CHARACTER_CAT'
     assert player.characters[2].id == 'SBB_CHARACTER_CAT'
@@ -675,12 +654,11 @@ def test_pup():
         ]
     )
 
-    board = Board({'1': player, '2': enemy})
-    winner, loser = board.fight(limit=1)
+    fight(player, enemy, limit=1)
 
-    assert board.p1.characters[1].id == "SBB_CHARACTER_CAT"
-    assert board.p1.characters[1].attack == 1
-    assert board.p1.characters[1].health == 1
+    assert player.characters[1].id == "SBB_CHARACTER_CAT"
+    assert player.characters[1].attack == 1
+    assert player.characters[1].health == 1
 
 
 def test_pup_shouldntbuff():
@@ -700,12 +678,11 @@ def test_pup_shouldntbuff():
         raw=True
     )
 
-    board = Board({'1': player, '2': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
-    assert board.p1.characters[1].id == "SBB_CHARACTER_CAT"
-    assert board.p1.characters[1].attack == 1
-    assert board.p1.characters[1].health == 1
+    assert player.characters[1].id == "SBB_CHARACTER_CAT"
+    assert player.characters[1].attack == 1
+    assert player.characters[1].health == 1
 
 
 def test_pup_shouldbuff():
@@ -726,8 +703,7 @@ def test_pup_shouldbuff():
         treasures=['''SBB_TREASURE_HERMES'BOOTS''']
     )
 
-    board = Board({'1': player, '2': enemy})
-    winner, loser = board.fight()
+    fight(player, enemy)
 
-    assert board.p1.characters[1].attack == 1
-    assert board.p1.characters[1].health == 1
+    assert player.characters[1].attack == 1
+    assert player.characters[1].health == 1

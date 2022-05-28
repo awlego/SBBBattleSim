@@ -107,7 +107,7 @@ class Character(EventManager):
 
     @property
     def max_health(self):
-        return self._base_health
+        return max(self._base_health, 0)
 
     def generate_attack(self, source, target, reason, attacking=False):
         return Damage(
@@ -120,11 +120,17 @@ class Character(EventManager):
 
 CHARACTER_EXCLUSION = (
     'SBB_CHARACTER_CAPTAINCROC',
+    'SBB_CHARACTER_FROGPRINCE',
+    'SBB_CHARACTER_AWOKENPRINCESS',
+    'SBB_CHARACTER_BIGBOSS',
+    'SBB_CHARACTER_EVILWOLF',
+    'SBB_CHARACTER_CERBERUS'
 )
 
 
 class Registry(object):
     characters = OrderedDict()
+    auto_registered = False
 
     def __getitem__(self, item):
         return self.characters.get(item, Character)
@@ -150,6 +156,10 @@ class Registry(object):
         )
 
     def autoregister(self):
+        if self.auto_registered:
+            return
+        self.auto_registered = True
+
         for _, name, _ in pkgutil.iter_modules(logic_path):
             character = __import__(name, globals(), locals(), ['CharacterType'], 1)
             self.register(name, character.CharacterType)

@@ -11,21 +11,22 @@ class RobinWoodOnFightStart(OnStart):
 
         if strongest_enemy_char:
             Buff(reason=ActionReason.ROBIN_WOOD_DEBUFF, source=self.source, targets=[strongest_enemy_char],
-                 attack=-30 if self.source.golden else -15, temp=False, stack=stack).resolve()
+                 attack=-14 if self.source.golden else -7, temp=False, stack=stack).resolve()
 
         if weakest_allied_char:
             Buff(reason=ActionReason.ROBIN_WOOD_BUFF, source=self.source, targets=[weakest_allied_char],
-                 attack=30 if self.source.golden else 15, temp=False, stack=stack).resolve()
+                 attack=14 if self.source.golden else 7, temp=False, stack=stack).resolve()
 
 
 class CharacterType(Character):
     display_name = 'Robin Wood'
+    ranged = True
 
     _attack = 7
     _health = 10
-    _level = 6
+    _level = 5
     _tribes = {Tribe.GOOD, Tribe.TREANT}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.player.board.register(RobinWoodOnFightStart, priority=50, source=self)
+        self.player.register(RobinWoodOnFightStart, priority=50, source=self)
